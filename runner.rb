@@ -2,17 +2,8 @@
 
 #TODO
 ## USE TSOCKS!!! http://pyvideo.org/video/609/web-scraping-reliably-and-efficiently-pull-data about 1:30 in to the movie
-## http://railspro.blogspot.com/2011/04/setting-user-agent-in-typhoeus_3322.html
 ## CookieJars http://stackoverflow.com/questions/9810150/manually-login-into-website-with-typheous
 ## PiCloud http://docs.picloud.com/advanced_examples.html
-
-=begin
-  Creative URL Mapper
-  Designed & Developed by Optimization Solutions Development, Display Advertising
-  Goal: Given an original_tag from a creative, find the landing page and record to a database
-  Possible Enhancements: Validate previously logged landing pages and ensure they map correctly
-  Env Reqs: Windows [AutoIT, Ruby, all gems listed], Mac OS X [cliclick binary, Ruby, all gems listed]
-=end
 
 #!/usr/bin/env ruby
 
@@ -51,14 +42,12 @@ class Mech
       f.password = ENV['AMZ_PASSWORD']
     end.submit
     
-    File.open("output.html","w") {|f| f.write(r.body) }
-    
     r.body.include?("Michael's Amazon.com")
   end
   
   def all_items
     set = {
-      movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a"),
+      #movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a"),
       tv: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cn%3A%212644981011%2Cn%3A%212644982011%2Cn%3A2858778011%2Cn%3A2864549011&bbn=2864549011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340066883&rd=1").search(".c3_ref.refList a")
     }
         
@@ -85,25 +74,35 @@ class Mech
         if total_count > upper_bound
           puts "we got a big one and we'll need to sort #{total_count} .. skipping for now"
           page_sort = true
-          next
         end
 
-        
-        hydra = Typhoeus::Hydra.new(:max_concurrency => 10)
+        hydra = Typhoeus::Hydra.new(:max_concurrency => 4)
 
         1.upto(total_pages) do |page_number|
           # Not-so-fault tolerant way to grab pages.
           # Assume each page is relatively static from Amazon and
           # do not re-process pages for now
           file = "pages/#{medium}_#{genre.gsub(/\W+/,'')}_#{page_number}.html"
-          next if File.exists?(file)
-          puts "Working on page: #{file}"
-          request = Typhoeus::Request.new("http://www.amazon.com#{a['href']}&page=#{page_number}")
-          request.on_complete do |response|
-            File.open(file,"w") { |f| f.write response.body }
+          unless File.exists?(file)
+            puts "Working on page: #{file}"
+            request = Typhoeus::Request.new("http://www.amazon.com#{a['href']}&page=#{page_number}&sort=price")
+            request.on_complete do |response|
+              File.open(file,"w") { |f| f.write response.body }
+            end
+            hydra.queue request
           end
-          hydra.queue request
+          
+          if page_sort
+            s_file = "pages/#{medium}_#{genre.gsub(/\W+/,'')}_#{page_number}_sort.html"
+            puts "Working on page: #{s_file}"
+            request = Typhoeus::Request.new("http://www.amazon.com#{a['href']}&page=#{page_number}&sort=-price")
+            request.on_complete do |response|
+              File.open(s_file,"w") { |f| f.write response.body }
+            end
+            hydra.queue request
+          end          
         end
+        
         hydra.run
       end
     end

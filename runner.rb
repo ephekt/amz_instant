@@ -58,7 +58,7 @@ class Mech
   
   def all_items
     set = {
-      # movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a"),
+      movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a"),
       tv: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cn%3A%212644981011%2Cn%3A%212644982011%2Cn%3A2858778011%2Cn%3A2864549011&bbn=2864549011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340066883&rd=1").search(".c3_ref.refList a")
     }
         
@@ -82,18 +82,14 @@ class Mech
 
         upper_bound = 4800
         page_sort = false
-        case
-        when total_count > 9600
-          puts "We will miss out on #{total_count-9600} items due to size"
-        when total_count > upper_bound
-          puts "we got a big one and we'll need to sort #{total_count}"
+        if total_count > upper_bound
+          puts "we got a big one and we'll need to sort #{total_count} .. skipping for now"
           page_sort = true
-        else
-          puts "Doable without work!"
+          next
         end
 
         
-        hydra = Typhoeus::Hydra.new(:max_concurrency => 2)
+        hydra = Typhoeus::Hydra.new(:max_concurrency => 10)
 
         1.upto(total_pages) do |page_number|
           # Not-so-fault tolerant way to grab pages.
@@ -109,7 +105,6 @@ class Mech
           hydra.queue request
         end
         hydra.run
-        exit
       end
     end
   end

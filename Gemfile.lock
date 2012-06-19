@@ -4,7 +4,6 @@ GEM
   specs:
     domain_name (0.5.2)
       unf (~> 0.0.3)
-    json (1.7.3)
     mechanize (2.3)
       domain_name (>= 0.5.1, ~> 0.5)
       mime-types (>= 1.17.2, ~> 1.17)
@@ -14,7 +13,6 @@ GEM
       ntlm-http (>= 0.1.1, ~> 0.1)
       webrobots (>= 0.0.9, ~> 0.0)
     mime-types (1.18)
-    mysql (2.8.1)
     net-http-digest_auth (1.2)
     net-http-persistent (2.5.2)
     nokogiri (1.5.4)
@@ -24,10 +22,6 @@ GEM
     unf (0.0.5)
       unf_ext
     unf_ext (0.0.4)
-    vapir-common (1.10.1)
-    vapir-firefox (1.10.1)
-      json
-      vapir-common (= 1.10.1)
     webrobots (0.0.13)
 
 PLATFORMS
@@ -35,7 +29,5 @@ PLATFORMS
 
 DEPENDENCIES
   mechanize
-  mysql
   nokogiri
   typhoeus
-  vapir-firefox

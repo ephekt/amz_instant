@@ -1,5 +1,0 @@
-puts "Forcing a stop on the browser"
-# sleep(3.5)
-# force Command + "." to stop loading of external resources
-system "osascript stop_ff_load.scpt"
-puts "Done Forcing a stop"

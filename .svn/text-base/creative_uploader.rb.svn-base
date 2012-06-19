@@ -1,0 +1,41 @@
+require 'rubygems'
+require 'cgi'
+require 'mysql'
+require 'base64'
+require 'yieldmanager'
+
+YM_CLIENT = Yieldmanager::Client.new({
+  :user => "api_mass_line_editor_tool",
+  :pass => Base64.decode64("MllLVzdrSjNYUg==\n"),
+  :env => "prod"
+}) unless defined? YM_CLIENT
+
+
+db_username = "click_mapper"
+db_pass = "map_that_out"
+db_hostname = "optisol-005.adx.pool.corp.sp2.yahoo.com"
+db_name = 'cachedb_eu'
+
+db_connection = Mysql.real_connect(db_hostname, db_username, db_pass, db_name)
+
+res = db_connection.query('SELECT creative_id, url, stored_to_rmx FROM `tmp_url_creative_map` WHERE stored_to_rmx = 0 LIMIT 100')
+
+
+token = YM_CLIENT.start_session
+res.each do |r|
+  creative_id = r.first
+  creative_url = r[1]
+  puts "CreativeID: #{creative_id}, CreativeURL: #{creative_url}"
+  begin
+    creative = YM_CLIENT.creative.get(token,r.first)
+    creative.click_url = creative_url
+    YM_CLIENT.creative.update(token,creative)
+    db_connection.query("UPDATE tmp_url_creative_map SET stored_to_rmx=1 WHERE creative_id = #{creative_id}")
+  rescue Exception => e
+    next if e.to_s.include? "No creative id"
+    puts "Failed to deal with creative: #{creative_id}, #{e}"
+  end
+end
+
+puts "Closing out session token"
+YM_CLIENT.end_session(token)

@@ -1,0 +1,277 @@
+=begin
+  Creative URL Mapper
+  Designed & Developed by Optimization Solutions Development, Display Advertising
+  Goal: Given an original_tag from a creative, find the landing page and record to a database
+  Possible Enhancements: Validate previously logged landing pages and ensure they map correctly
+  Env Reqs: Windows [AutoIT, Ruby, all gems listed], Mac OS X [cliclick binary, Ruby, all gems listed]
+=end
+
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'cgi'
+require 'mysql'
+require 'vapir'
+require 'domainatrix'
+require 'base64'
+
+class Runner
+  attr_accessor :db_username, :db_pass, :db_hostname, :db_name,
+                :browser, :hash_set, :db_connection, :env_is_windows, :win_env,
+                :tmp_path, :max_attempts, :set_size, :creative_ids
+  
+  def initialize mode = 'test', speed = :fast, locale = "US", set_size = 5000, creative_ids = nil
+    self.set_size = set_size
+    self.max_attempts = (:fast == speed ? 1 : 4)
+    self.creative_ids = creative_ids
+    set_env
+    start_browser if mode != 'test'
+    
+    if locale == "EU"
+      self.db_username = "click_mapper"
+      self.db_pass = "map_that_out"
+      self.db_hostname = "optisol-005.adx.pool.corp.sp2.yahoo.com"
+      self.db_name = 'cachedb_eu'
+    else
+#      self.db_username = "cache_master_w"
+#      self.db_pass =Base64.decode64('MXdyMXQzc2cwMGQ=')
+#      self.db_hostname = "optisol-013.ads.pool.corp.sp1.yahoo.com"
+#      self.db_name = 'cachedb'
+    end
+    
+    puts "Click URL Mapper, OptiSol Dev\nMode: #{mode}\nEnvironment Loaded: #{self.env_is_windows ? 'Windows' : 'Linux'}\nLocale: #{locale}\nSet Size: #{set_size}\nSpeed: #{speed}"
+  end
+  
+  def start_browser
+    self.browser = Vapir::Firefox.new
+    self.browser.goto('http://www.google.com')
+    puts self.browser.inspect
+    puts "Started browser"
+  end  
+
+  def set_env
+    if RUBY_PLATFORM =~ /mswin|mingw32/
+      require 'win32ole'
+      self.env_is_windows = true
+      self.win_env = WIN32OLE.new("AutoItX3.Control")
+      self.tmp_path = "C:/tmp/creative_mappings#{rand(9999)}/"
+    else
+      self.env_is_windows = false
+      self.tmp_path = "/tmp/creative_mapping#{rand(9999)}/"
+    end
+  end
+  
+  def database_connection
+    self.db_connection ||= begin
+      puts "Connecting to DB: #{self.db_hostname}..."
+      self.db_connection = Mysql.real_connect(self.db_hostname, self.db_username, self.db_pass, self.db_name)
+    end
+  end
+  
+  def do_click attempts
+    puts "Attempt: #{attempts}"
+    x = 38
+    
+    if attempts > 1 && attempts < max_attempts
+      x = x + (200 * attempts)
+    end
+    
+    if self.env_is_windows
+      self.win_env.mousemove(x,170)
+      self.win_env.mouseclick
+    else
+      # two clicks for Mac OS X
+      system "/Users/miker/optisol/src/ruby/url_mapper/cliclick #{x} 157" # Click the ad.
+      system "/Users/miker/optisol/src/ruby/url_mapper/cliclick #{x} 157" # Click the ad.
+    end
+      # puts "Clicked x at #{x}"
+  end
+  
+  def generate_files
+    select = "id, contents, original_tag"
+    from = "creative"
+    where = [
+      "(original_tag IS NOT NULL)",
+      " AND (original_tag NOT LIKE '%adrevolver%')", #AdRevolver is a known dead host
+      " AND (active = 1)",
+      " AND (click_url IS NULL OR click_url = '')",
+      " AND (id NOT IN (select creative_id from tmp_url_creative_map))"
+      ]
+    if self.creative_ids
+      where << " AND (id IN (#{self.creative_ids}))"
+    end
+    limit = self.set_size.to_s
+    order = "id DESC"
+    final_query = "SELECT #{select} FROM #{from} WHERE (#{where.join}) ORDER BY #{order} LIMIT #{limit}"
+    set = database_connection.query(final_query)
+    puts "Generating files...\nWith Query: '''#{final_query}'''\nAnd items: #{set.num_rows}"
+    begin
+      Dir.mkdir(self.tmp_path)
+    rescue Exception => e
+      # already exists
+      puts "[#{__method__}] Rescue: #{e}"
+    end
+    
+    while row = set.fetch_row do
+      creative_id = row[0]
+      ad_tag = row[2].gsub("${CLICKURLENC}","https%3A%2F%2Fmy.yieldmanager.com%2Fadvertiser%2Fcheck_click.php%3FR%3D1288891556_667387%2C")
+      ad_tag = ad_tag.gsub("${CLICKURL}","https://my.yieldmanager.com/advertiser/check_click.php?R=foo,")
+      ad_tag = ad_tag.gsub("${REQUESTID}","barrrr")
+      ad_tag = ad_tag.gsub(/\$\{\w+\}/,"4")
+      ad_tag = ad_tag.gsub("Iframe/JavaScript:","")
+      html = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html lang="en-US" xml:lang="en-US" xmlns="http://www.w3.org/1999/xhtml"><head><title>'+row[0]+'</title></head><body>'+ad_tag+'</body></html>'
+      location = self.tmp_path + row[0] + '.html'
+      File.open(location, 'w') {|f| f.write(html) }
+    end
+  end
+  
+  def get_hash_set
+    begin
+      list = {}
+      Dir.entries(self.tmp_path).each do |entry|
+        if entry =~ /\d+\./
+          entry_parts = entry.split('.')
+          list[entry_parts.first] = self.tmp_path+entry
+        end
+      end
+      return list
+    rescue Exception => e
+      puts "WTF #{e}"
+    end
+  end
+    
+  def attach_to_pop current_creative_id
+    puts self.browser.inspect
+    attached = false
+    attempts = 0
+    while(!attached && attempts <= max_attempts)
+      do_click attempts
+      sleep(1)
+      begin
+        puts "Trying to attach to a browser.url with http"
+        browser = Vapir::Firefox.attach(:url, /^http/)
+        puts "Attaching to other window: #{browser.url}"
+        attached = true
+        self.browser = browser
+      rescue Exception => e
+        puts "Attempting to attach. Failed: #{e}"
+      end
+        attempts += 1
+    end
+      
+    if !attached && attempts >= max_attempts
+      puts "Failed to Attached (Final)... Resetting Browser"
+      begin 
+        close_blank_windows
+        Vapir::Firefox.attach(:url,/tmp/)
+      rescue Exception => e
+        puts "Error: #{e}\n Will now kill browser"
+        kill_browser
+        # puts "Quit old browser. Starting new one..."
+        sleep(2)
+        self.browser = Vapir::Firefox.new
+        sleep(2)
+      end
+      return false
+    end
+    return true
+  end
+  
+  def close_blank_windows
+    begin
+      Vapir::Firefox.attach(:url, "about:blank" ).close
+    rescue Exception => e
+      puts "no blank windows to kill: #{e}"
+    end
+  end
+  
+  def kill_browser
+    puts "Trying to kill: " + self.browser.url
+    puts "kill browser -- "; exit
+    if self.env_is_windows
+      system "taskkill /im Firefox.exe /f /t >nul 2>&1"
+    else
+      system "killall -9 firefox-bin"
+    end
+  end
+  
+  def close_file_window
+    begin
+      Vapir::Firefox.attach(:url, /file:\/\//).close
+    rescue
+      puts "Unable to kill file window..."
+    end
+  end
+  
+  def start
+    start_time = Time.now
+    hash_set ||= begin get_hash_set end.each do |key,value|
+      result = database_connection.query("select * from `#{self.db_name}`.`tmp_url_creative_map` where creative_id = #{key}")
+      puts "Visiting #{value}"
+      # http://www.macromedia.com/support/documentation/en/flashplayer/help/settings_manager04.html
+      # system 'osascript /Users/miker/optisol/src/htdocs/pg/miker/max_and_set_window.scpt' # focus the window in the upper left corner.
+      
+      file_url = "file://"+value
+      begin
+        self.browser.goto(file_url)
+      rescue Exception => e
+        puts "Error trying to go to #{file_url}"
+        system "ruby ff_stop.rb"
+        next
+      end
+      self.browser.maximize
+      
+      sleep(2)
+      
+      if !attach_to_pop key # will sleep and shiz
+        next
+      end
+
+      close_file_window
+      next unless self.browser.exists?
+      puts "Browser URL: " + (self.browser.url || "None")
+      if self.browser.url.include?("https://my.yieldmanager.com/")
+        # have to login
+        sleep(2)
+        self.browser.text_field(:name, "username").set "sales_eng_api_user"
+        self.browser.text_field(:name, "password").set "GbofMt4cebwu"
+        self.browser.form(:method, "POST").submit
+        # puts "Logged in to YM!"
+        sleep(2)
+      end
+
+      browser_url = self.browser.url
+      parsed_url = nil
+      parsed_url = Domainatrix.parse(browser_url).host rescue Exception
+      if parsed_url.nil? || !parsed_url
+        puts "Creative ID unable to map: #{key} <-> #{value}"
+      else
+        puts "Creative ID maps to TLD: #{parsed_url}"
+        add_to_db(key,browser_url,parsed_url)
+      end
+    end
+    finish_time = Time.now
+    puts "#{finish_time - start_time} seconds to iterate over #{hash_set.size} items"
+  end
+  
+  def add_to_db creative_id, url = "", parsed_url = ""
+    raise "Invalid Creative ID/URL" unless !url.empty? && !parsed_url.empty?
+    result = database_connection.query("select * from `#{self.db_name}`.`tmp_url_creative_map` where creative_id = #{creative_id}")
+    if result.num_rows == 1
+      old_parsed_url = result.fetch_hash['parsed_url']
+      bad_url = old_parsed_url == parsed_url ? 0 : 1
+      database_connection.query("update `#{self.db_name}`.`tmp_url_creative_map` set bad_url=#{bad_url}, new_url='#{parsed_url}' where creative_id = #{creative_id}")
+    elsif result.num_rows <= 0
+      puts "Storing Creative, Brand New"
+      query = "INSERT INTO  `#{self.db_name}`.`tmp_url_creative_map` (
+      `creative_id` ,
+      `url`,
+      `parsed_url`
+      )
+      VALUES (
+      '#{creative_id}',  '#{url}', '#{parsed_url}'
+      );"
+      database_connection.query(query)
+    end
+  end
+end

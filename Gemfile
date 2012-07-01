@@ -4,5 +4,6 @@ source :gemcutter
 gem 'nokogiri'
 gem 'typhoeus'
 gem 'mechanize'
-# gem 'mysql'
-# gem 'vapir-firefox'
+gem 'mongo'
+gem 'bson'
+gem 'bson_ext'

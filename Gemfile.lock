@@ -2,6 +2,9 @@ GEM
   remote: http://gems.github.com/
   remote: http://rubygems.org/
   specs:
+    bson (1.6.2)
+    bson_ext (1.6.2)
+      bson (~> 1.6.2)
     domain_name (0.5.2)
       unf (~> 0.0.3)
     mechanize (2.3)
@@ -13,6 +16,8 @@ GEM
       ntlm-http (>= 0.1.1, ~> 0.1)
       webrobots (>= 0.0.9, ~> 0.0)
     mime-types (1.18)
+    mongo (1.6.2)
+      bson (~> 1.6.2)
     net-http-digest_auth (1.2)
     net-http-persistent (2.5.2)
     nokogiri (1.5.4)
@@ -28,6 +33,9 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  bson
+  bson_ext
   mechanize
+  mongo
   nokogiri
   typhoeus

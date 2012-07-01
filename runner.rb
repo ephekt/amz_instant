@@ -7,10 +7,11 @@
 
 #!/usr/bin/env ruby
 
-require 'rubygems'
-require 'typhoeus'
-require 'mechanize'
-require 'nokogiri'
+require "rubygems"
+require 'bundler'
+
+Bundler.require
+
 # require 'vapir'
 # require 'mysql'
 
@@ -47,8 +48,8 @@ class Mech
   
   def all_items
     set = {
-      #movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a"),
-      tv: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cn%3A%212644981011%2Cn%3A%212644982011%2Cn%3A2858778011%2Cn%3A2864549011&bbn=2864549011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340066883&rd=1").search(".c3_ref.refList a")
+      #tv: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cn%3A%212644981011%2Cn%3A%212644982011%2Cn%3A2858778011%2Cn%3A2864549011&bbn=2864549011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340066883&rd=1").search(".c3_ref.refList a"),
+      #movie: @agent.get("http://www.amazon.com/gp/search/other?redirect=true&rh=n%3A2625373011%2Cp_n_format_browse-bin%3A2650306011%2Cn%3A%212625374011%2Cn%3A2649512011&bbn=2625374011&pickerToList=theme_browse-bin&ie=UTF8&qid=1340067362&rd=1").search(".c3_ref.refList a")
     }
         
     set.each do |medium,anchors|
@@ -76,7 +77,7 @@ class Mech
           page_sort = true
         end
 
-        hydra = Typhoeus::Hydra.new(:max_concurrency => 4)
+        hydra = Typhoeus::Hydra.new(:max_concurrency => 3)
 
         1.upto(total_pages) do |page_number|
           # Not-so-fault tolerant way to grab pages.
